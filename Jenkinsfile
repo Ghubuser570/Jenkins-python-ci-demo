@@ -32,7 +32,7 @@ pipeline {
                     bat 'venv\\Scripts\\activate.bat'
 
                     // Install packages listed in requirements.txt using pip.
-                    bat 'pip install -r requirements.txt'
+                    bat 'venv\\Scripts\\python.exe -m pip install -r requirements.txt'
                 }
             }
         }
@@ -45,7 +45,7 @@ pipeline {
                     bat 'venv\\Scripts\\activate.bat'
 
                     // Run pytest to execute your Python tests.
-                    bat 'pytest'
+                    bat 'venv\\Scripts\\python.exe -m pytest'
                 }
             }
         }
