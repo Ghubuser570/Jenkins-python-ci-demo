@@ -14,7 +14,7 @@ pipeline {
                 // 'branch: 'main'' specifies the branch to build.
                 // 'credentialsId: 'github-pat'' references the Secret text credential you set up in Jenkins.
                 // 'url' is the HTTPS URL of your GitHub repository.
-                git branch: 'main', credentialsId: 'github-pat', url: 'https://github.com/Ghubuser570/jenkins-python-ci-demo.git'
+                git branch: 'main', credentialsId: 'github-username-pat', url: 'https://github.com/Ghubuser570/jenkins-python-ci-demo.git'
                 // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username.
             }
         }
