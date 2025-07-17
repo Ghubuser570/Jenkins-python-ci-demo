@@ -9,3 +9,5 @@ disable=
     C0116, # Missing function or method docstring
     R0903, # Too few public methods
     R0913  # Too many arguments
+    C0301, # Line too long (Black handles this, so Pylint doesn't need to fail the build)
+    W0621  # Redefining name from outer scope (often harmless in small scripts)
