@@ -1,11 +1,11 @@
 # jenkins-python-ci-demo/ml_api_client.py (Corrected Version with Dynamic Feature Extraction)
-import json # Standard library
-import os   # Standard library
+import json  # Standard library
+import os  # Standard library
 import sys  # Standard library
-import requests # Third-party
-import git # Third-party
-import jenkins # Third-party
-import numpy as np # Third-party (used for random)
+import requests  # Third-party
+import git  # Third-party
+import jenkins  # Third-party
+import numpy as np  # Third-party (used for random)
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
@@ -63,12 +63,14 @@ def extract_real_build_features():
         print(
             f"Git Features Extracted: LOC Changed={features['lines_of_code_changed']}, Files Changed={features['num_files_changed']}, Commit Msg Len={features['commit_message_length']}"
         )
-    except git.InvalidGitRepositoryError as e: # More specific for Git errors
-        print(f"WARNING: Invalid Git repository or no commits: {e}. Using default/simulated values.")
-        features['lines_of_code_changed'] = 50
-        features['num_files_changed'] = 5
-        features['commit_message_length'] = 50
-    
+    except git.InvalidGitRepositoryError as e:  # More specific for Git errors
+        print(
+            f"WARNING: Invalid Git repository or no commits: {e}. Using default/simulated values."
+        )
+        features["lines_of_code_changed"] = 50
+        features["num_files_changed"] = 5
+        features["commit_message_length"] = 50
+
     except Exception as e:
         print(
             f"WARNING: Could not extract Git features: {e}. Using default/simulated values."
@@ -113,10 +115,12 @@ def extract_real_build_features():
             f"WARNING: Jenkins API error during feature extraction: {e}. Using default/simulated values."
         )
         features["previous_build_status"] = 1  # Fallback
-    
-    except requests.exceptions.ConnectionError as e: # Specific for network issues
-        print(f"WARNING: Jenkins connection error: {e}. Using default/simulated values.")
-        features['previous_build_status'] = 1
+
+    except requests.exceptions.ConnectionError as e:  # Specific for network issues
+        print(
+            f"WARNING: Jenkins connection error: {e}. Using default/simulated values."
+        )
+        features["previous_build_status"] = 1
 
     except Exception as e:
         print(
