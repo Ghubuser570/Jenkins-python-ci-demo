@@ -1,18 +1,18 @@
-# jenkins-python-ci-demo/ml_api_client.py (Enhanced Version with GitPython & Python-Jenkins)
+# jenkins-python-ci-demo/ml_api_client.py (Corrected Version with Dynamic Feature Extraction)
 import requests
 import json
 import os
 import git # For GitPython
 import jenkins # For Python-Jenkins
 import sys # For sys.exit()
-import numpy as np
+import numpy as np # For random number generation (for simulated features)
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
 JENKINS_URL = "http://localhost:8080"
 JENKINS_USERNAME = "75" # Your Jenkins admin username
 JENKINS_API_TOKEN = "11996ed55f52b97013614dde3865c5b594" # Your Jenkins API Token
-JENKINS_JOB_NAME = "jenkins-python-pipeline"
+JENKINS_JOB_NAME = "jenkins-python-pipeline" # The name of your Jenkins pipeline job
 
 def get_ml_predictions(build_features):
     """
@@ -67,9 +67,14 @@ def extract_real_build_features():
 
     # --- Extract Jenkins Features using Python-Jenkins ---
     try:
-        server = jenkins.Jenkins(JENKINS_URL, username=JENKINS_USERNAME, password=JENKINS_API_TOKEN)
-        # Verify connection
-        server.get_version()
+        print("Attempting to connect to Jenkins for feature extraction...")
+        # Initialize Jenkins client with explicit CSRF handling
+        # The 'timeout' is good practice.
+        server = jenkins.Jenkins(JENKINS_URL, username=JENKINS_USERNAME, password=JENKINS_API_TOKEN, timeout=10)
+
+        # Verify connection by getting Jenkins version (this also implicitly tests authentication)
+        server_version = server.get_version()
+        print(f"Successfully connected to Jenkins API! Version: {server_version}")
 
         # Get the last completed build for the current job
         job_info = server.get_job_info(JENKINS_JOB_NAME)
@@ -82,10 +87,13 @@ def extract_real_build_features():
         features['previous_build_status'] = 1 if last_build_result == 'SUCCESS' else 0
         print(f"Jenkins Feature Extracted: Previous Build Status={last_build_result} ({features['previous_build_status']})")
 
+    except jenkins.JenkinsException as e:
+        # Catch specific Jenkins errors for better debugging
+        print(f"WARNING: Jenkins API error during feature extraction: {e}. Using default/simulated values.")
+        features['previous_build_status'] = 1 # Fallback
     except Exception as e:
-        print(f"WARNING: Could not extract Jenkins features: {e}. Using default/simulated values.")
-        # Fallback to simulated values if Jenkins extraction fails
-        features['previous_build_status'] = 1 # Assume success if cannot check
+        print(f"WARNING: An unexpected error occurred during Jenkins feature extraction: {e}. Using default/simulated values.")
+        features['previous_build_status'] = 1 # Fallback
 
     # --- Remaining Features (Simulated for simplicity) ---
     # Truly dynamic values for these would require more complex monitoring/instrumentation
@@ -94,34 +102,19 @@ def extract_real_build_features():
     features['developer_experience_level'] = 3 # Simulated (e.g., 1=junior, 5=senior)
     features['build_environment_load'] = np.random.randint(40, 90) # Simulated load
 
-# ... (existing imports and configuration) ...
-
-def extract_real_build_features():
-    """
-    Extracts real-ish build features from the Git repository and Jenkins.
-    """
-    features = {}
-
-    # --- TEMPORARY: Force a SUCCESS scenario for demo ---
-    # This will override the Git and Jenkins extraction for this specific run
-    # and send features that the ML models will likely classify as good.
-    features['lines_of_code_changed'] = 20
-    features['num_files_changed'] = 2
-    features['num_tests_run'] = 250
-    features['test_pass_rate'] = 0.99
-    features['previous_build_status'] = 1 # Assume previous was success
-    features['commit_message_length'] = 30
-    features['developer_experience_level'] = 4
-    features['build_environment_load'] = 50
-    print("\n--- DEMO MODE: FORCING SUCCESS SCENARIO FEATURES ---")
+    # --- TEMPORARY: Logic to force a failure scenario for demo (UNCOMMENT FOR DEMO, COMMENT FOR NORMAL OPERATION) ---
+    # Uncomment this block to demonstrate a quality gate failure
+    # Forcing a scenario that ML models would likely flag as failure/anomaly
+    # features['lines_of_code_changed'] = 450
+    # features['num_files_changed'] = 40
+    # features['num_tests_run'] = 50
+    # features['test_pass_rate'] = 0.60
+    # features['previous_build_status'] = 0
+    # features['commit_message_length'] = 120
+    # features['developer_experience_level'] = 2
+    # features['build_environment_load'] = 95
+    # print("\n--- DEMO MODE: FORCING FAILURE SCENARIO FEATURES ---")
     # --- END TEMPORARY ---
-
-    # Important: If you want to use the actual Git/Jenkins extraction,
-    # you would remove the "DEMO MODE" block above and uncomment the
-    # original Git/Jenkins extraction logic here.
-    # For now, we're overriding it to guarantee a pass.
-
-    return features
 
     return features
 
