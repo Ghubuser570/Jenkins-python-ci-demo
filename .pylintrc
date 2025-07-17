@@ -1,0 +1,11 @@
+# .pylintrc
+[MASTER]
+load-plugins=
+
+[MESSAGES CONTROL]
+disable=
+    C0114, # Missing module docstring
+    C0115, # Missing class docstring
+    C0116, # Missing function or method docstring
+    R0903, # Too few public methods
+    R0913  # Too many arguments

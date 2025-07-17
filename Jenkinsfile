@@ -40,6 +40,30 @@ pipeline {
             }
         }
 
+        stage('Code Formatting Check') {
+            steps {
+                script {
+                    // Use black to check for formatting issues.
+                    // --check: don't write changes, just return non-zero exit code if changes would be made.
+                    // --diff: show the diff of what would be changed.
+                    // . : check current directory
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m black --check --diff .'
+                }
+            }
+        }
+
+        // --- NEW STAGE: Code Linting (Pylint) ---
+        stage('Code Linting') {
+            steps {
+                script {
+                    // Run pylint on your Python application files.
+                    // Adjust 'app.py' and 'test_app.py' to include all your Python files.
+                    // Consider adding ml_api_client.py if you want to lint it too.
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pylint app.py test_app.py ml_api_client.py'
+                }
+            }
+        }
+
         stage('ML Quality Gate') {
             steps {
                 script {
