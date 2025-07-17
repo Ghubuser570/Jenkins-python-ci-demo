@@ -50,6 +50,19 @@ pipeline {
             }
         }
 
+        stage('ML Quality Gate') {
+            steps {
+                script {
+                    // Activate the virtual environment
+                    bat 'venv\\Scripts\\activate.bat'
+
+                    // Call the Python script that interacts with your ML API
+                    // The script will exit with 0 for success, 1 for failure (quality gate failed)
+                    bat 'venv\\Scripts\\python.exe ml_api_client.py'
+                }
+            }
+        }
+
         // Stage 4: Simple Build/Verification (Placeholder for more complex build steps)
         stage('Build/Verify') {
             steps {
