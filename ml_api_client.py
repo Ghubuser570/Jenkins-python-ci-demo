@@ -70,12 +70,10 @@ def extract_real_build_features():
         features["lines_of_code_changed"] = 50
         features["num_files_changed"] = 5
         features["commit_message_length"] = 50
-
-    except Exception as e:
+    except Exception as e:  # Catch other unexpected Git-related errors
         print(
             f"WARNING: Could not extract Git features: {e}. Using default/simulated values."
         )
-        # Fallback to simulated values if Git extraction fails
         features["lines_of_code_changed"] = 50
         features["num_files_changed"] = 5
         features["commit_message_length"] = 50
@@ -110,23 +108,20 @@ def extract_real_build_features():
         )
 
     except jenkins.JenkinsException as e:
-        # Catch specific Jenkins errors for better debugging
         print(
             f"WARNING: Jenkins API error during feature extraction: {e}. Using default/simulated values."
         )
-        features["previous_build_status"] = 1  # Fallback
-
+        features["previous_build_status"] = 1
     except requests.exceptions.ConnectionError as e:  # Specific for network issues
         print(
             f"WARNING: Jenkins connection error: {e}. Using default/simulated values."
         )
         features["previous_build_status"] = 1
-
-    except Exception as e:
+    except Exception as e:  # Catch other unexpected Jenkins-related errors
         print(
             f"WARNING: An unexpected error occurred during Jenkins feature extraction: {e}. Using default/simulated values."
         )
-        features["previous_build_status"] = 1  # Fallback
+        features["previous_build_status"] = 1
 
     # --- Remaining Features (Simulated for simplicity) ---
     # Truly dynamic values for these would require more complex monitoring/instrumentation

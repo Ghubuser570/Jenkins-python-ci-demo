@@ -3,11 +3,6 @@
 load-plugins=
 
 [MESSAGES CONTROL]
-disable=
-    C0114, # Missing module docstring
-    C0115, # Missing class docstring
-    C0116, # Missing function or method docstring
-    R0903, # Too few public methods
-    R0913  # Too many arguments
-    C0301, # Line too long (Black handles this, so Pylint doesn't need to fail the build)
-    W0621  # Redefining name from outer scope (often harmless in small scripts)
+# Disable the given comma separated list of messages by id or name.
+# e.g. W0611, C0103
+disable=C0114,C0115,C0116,R0903,R0913,C0301,W0621
