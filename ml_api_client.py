@@ -11,7 +11,7 @@ import numpy as np
 ML_API_URL = "http://localhost:5000/predict"
 JENKINS_URL = "http://localhost:8080"
 JENKINS_USERNAME = "75" # Your Jenkins admin username
-JENKINS_API_TOKEN = "11e3184493de95cb86776f62d6a90e0bfc" # Your Jenkins API Token
+JENKINS_API_TOKEN = "11996ed55f52b97013614dde3865c5b594" # Your Jenkins API Token
 JENKINS_JOB_NAME = "jenkins-python-pipeline"
 
 def get_ml_predictions(build_features):
