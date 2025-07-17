@@ -25,14 +25,7 @@ pipeline {
                 script {
                     // Create a Python virtual environment to isolate dependencies.
                     // 'py -3 -m venv venv' uses the Python launcher to create a venv for Python 3.
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m venv venv'
-
-                    // Activate the virtual environment for subsequent commands.
-                    // 'venv\\Scripts\\activate.bat' is the correct activation script for Windows.
-                    bat 'venv\\Scripts\\activate.bat'
-
-                    // Install packages listed in requirements.txt using pip.
-                    bat 'venv\\Scripts\\python.exe -m pip install -r requirements.txt'
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pip install -r requirements.txt'
                 }
             }
         }
@@ -41,11 +34,8 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Activate the virtual environment again to ensure pytest runs within it.
-                    bat 'venv\\Scripts\\activate.bat'
-
-                    // Run pytest to execute your Python tests.
-                    bat 'venv\\Scripts\\python.exe -m pytest'
+                    // Directly call python.exe to run pytest
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pytest'
                 }
             }
         }
@@ -53,12 +43,8 @@ pipeline {
         stage('ML Quality Gate') {
             steps {
                 script {
-                    // Activate the virtual environment
-                    bat 'venv\\Scripts\\activate.bat'
-
-                    // Call the Python script that interacts with your ML API
-                    // The script will exit with 0 for success, 1 for failure (quality gate failed)
-                    bat 'venv\\Scripts\\python.exe ml_api_client.py'
+                    // Directly call python.exe to run the client script
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" ml_api_client.py'
                 }
             }
         }

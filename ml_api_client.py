@@ -67,7 +67,7 @@ def extract_real_build_features():
 
     # --- Extract Jenkins Features using Python-Jenkins ---
     try:
-        server = jenkins.Jenkins(JENKINS_URL, username=JENKINS_USERNAME, password=JENKINS_PASSWORD)
+        server = jenkins.Jenkins(JENKINS_URL, username=JENKINS_USERNAME, password=JENKINS_API_TOKEN)
         # Verify connection
         server.get_version()
 
