@@ -88,6 +88,7 @@ pipeline {
     post {
         // 'always' block runs every time.
         always {
+            echo 'Post-build actions always executed.'
             // Clean up the workspace after the build to free up space.
            // cleanWs()
         }
