@@ -90,9 +90,8 @@ pipeline {
     post {
         // 'always' block runs every time.
         always {
-            // Clean up the workspace after the build to free up space.
-            cleanWs()
             echo 'Post-build actions always executed.'
+            
             script {
                 def sourceDbPath = "data\\build_history.db"
                 def destinationDbPath = "C:\\Users\\75\\Desktop\\Capstone\\Jenkins-python-ci-demo\\data\\build_history.db"
@@ -109,6 +108,7 @@ pipeline {
                     echo "build_history.db not found in Jenkins workspace, skipping copy."
                 }
             }
+            cleanWs()
         }
         // 'success' block runs only if all stages passed.
         success {
