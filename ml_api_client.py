@@ -16,7 +16,7 @@ JENKINS_URL = "http://localhost:8080"
 JENKINS_USERNAME = "75"  # Your Jenkins admin username
 JENKINS_API_TOKEN = "11996ed55f52b97013614dde3865c5b594"  # Your Jenkins API Token
 JENKINS_JOB_NAME = "jenkins-python-pipeline"  # The name of your Jenkins pipeline job
-SQLITE_DB_PATH = "build_history.db"  # Path to SQLite database file
+SQLITE_DB_PATH = os.path.join("data", "build_history.db")
 
 
 def get_ml_predictions(build_features):
@@ -44,6 +44,7 @@ def initialize_db():
     Initializes the SQLite database and creates the build_records table
     if it does not already exist.
     """
+    os.makedirs(os.path.dirname(SQLITE_DB_PATH), exist_ok=True)
     conn = None
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
