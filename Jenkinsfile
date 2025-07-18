@@ -72,6 +72,23 @@ pipeline {
                 }
             }
         }
+        
+        stage('Persist Build History DB') {
+            steps {
+                script {
+                    // Source path: Relative to Jenkins workspace
+                    def sourceDbPath = "data\\build_history.db"
+                    // Destination path: Your absolute local project path + data folder
+                    def destinationDbPath = "C:\\Users\\75\\Desktop\\Capstone\\Jenkins-python-ci-demo\\data\\build_history.db"
+
+                    // Use 'xcopy /Y' to overwrite existing file without prompt
+                    // Or 'copy /Y' if xcopy is not available or preferred for single file
+                    // Using 'copy /Y' for simplicity and broad compatibility
+                    bat "copy /Y \"${sourceDbPath}\" \"${destinationDbPath}\""
+                    echo "Copied build_history.db from Jenkins workspace to ${destinationDbPath}"
+                }
+            }
+        }
 
         // Stage 4: Simple Build/Verification (Placeholder for more complex build steps)
         stage('Build/Verify') {
