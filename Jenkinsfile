@@ -72,23 +72,8 @@ pipeline {
                 }
             }
         }
-        
-        stage('Persist Build History DB') {
-            steps {
-                script {
-                    // Source path: Relative to Jenkins workspace
-                    def sourceDbPath = "data\\build_history.db"
-                    // Destination path: Your absolute local project path + data folder
-                    def destinationDbPath = "C:\\Users\\75\\Desktop\\Capstone\\Jenkins-python-ci-demo\\data\\build_history.db"
 
-                    // Use 'xcopy /Y' to overwrite existing file without prompt
-                    // Or 'copy /Y' if xcopy is not available or preferred for single file
-                    // Using 'copy /Y' for simplicity and broad compatibility
-                    bat "copy /Y \"${sourceDbPath}\" \"${destinationDbPath}\""
-                    echo "Copied build_history.db from Jenkins workspace to ${destinationDbPath}"
-                }
-            }
-        }
+        
 
         // Stage 4: Simple Build/Verification (Placeholder for more complex build steps)
         stage('Build/Verify') {
@@ -107,6 +92,23 @@ pipeline {
         always {
             // Clean up the workspace after the build to free up space.
             cleanWs()
+            echo 'Post-build actions always executed.'
+            script {
+                def sourceDbPath = "data\\build_history.db"
+                def destinationDbPath = "C:\\Users\\75\\Desktop\\Capstone\\Jenkins-python-ci-demo\\data\\build_history.db"
+
+                // Check if the source DB file exists in the workspace before attempting to copy
+                // This prevents errors if the ML Quality Gate itself failed before creating the DB
+                def workspaceDataDir = "${env.WORKSPACE}\\data" // Path to the data dir in Jenkins workspace
+                def sourceFileExists = fileExists("${workspaceDataDir}\\build_history.db")
+
+                if (sourceFileExists) {
+                    bat "copy /Y \"${sourceDbPath}\" \"${destinationDbPath}\""
+                    echo "Copied build_history.db from Jenkins workspace to ${destinationDbPath}"
+                } else {
+                    echo "build_history.db not found in Jenkins workspace, skipping copy."
+                }
+            }
         }
         // 'success' block runs only if all stages passed.
         success {
