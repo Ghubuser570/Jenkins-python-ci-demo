@@ -3,8 +3,8 @@ import json
 import sqlite3
 import datetime
 import argparse
-import sys  # NEW: Import sys for sys.exit()
-import requests  # MOVED: requests import after standard library imports
+import sys  # Import sys for sys.exit()
+import requests  # requests import after standard library imports
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
@@ -18,9 +18,11 @@ def create_db_and_table():
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
+        # NEW: Drop table if it exists to ensure schema is always up-to-date
+        cursor.execute("DROP TABLE IF EXISTS build_records;")
         cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS build_records (
+            CREATE TABLE build_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
                 build_number INTEGER NOT NULL,
@@ -47,7 +49,7 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
         timestamp = datetime.datetime.now().isoformat()
-
+        
         # Convert dicts to JSON strings for storage
         features_json = json.dumps(features)
         predictions_json = json.dumps(predictions)
@@ -93,15 +95,12 @@ def get_previous_build_status_from_db():
             predictions = json.loads(row["raw_predictions_json"])
             # Assuming 'build_success_prediction' is 1 for success, 0 for failure
             return predictions.get("build_success_prediction", 1)
-        # REMOVED ELSE BLOCK AND DE-INDENTED
         print(
             "WARNING: Could not fetch previous build status from DB. Assuming previous success (1)."
-        )  # Removed {e} as it's not available here
+        )
         return 1
     except sqlite3.Error as e:
-        print(
-            f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1)."
-        )
+        print(f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1).")
         return 1
     finally:
         if conn:
@@ -149,9 +148,7 @@ def main():
 
     # Make prediction request to ML API
     try:
-        response = requests.post(
-            ML_API_URL, json=features, timeout=10
-        )  # ADDED timeout=10
+        response = requests.post(ML_API_URL, json=features, timeout=10)  # ADDED timeout=10
         response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
         predictions = response.json()
         print(f"ML API Predictions: {predictions}")
@@ -162,7 +159,9 @@ def main():
         )
 
         # --- Implement Quality Gate Logic ---
-        if predictions.get("build_success_prediction", 0) == 0:
+        if (
+            predictions.get("build_success_prediction", 0) == 0
+        ):
             print("QUALITY GATE FAILED: ML model predicts build failure!")
             sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
 
