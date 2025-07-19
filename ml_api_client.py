@@ -1,9 +1,10 @@
 # ml_api_client.py
-import requests
 import json
 import sqlite3
 import datetime
-import argparse  # Import argparse for command-line arguments
+import argparse
+import sys  # NEW: Import sys for sys.exit()
+import requests  # MOVED: requests import after standard library imports
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
@@ -28,7 +29,7 @@ def create_db_and_table():
                 raw_features_json TEXT NOT NULL,
                 raw_predictions_json TEXT NOT NULL
             );
-        """
+            """
         )
         conn.commit()
         print(f"Database and table created/verified at {SQLITE_DB_PATH}")
@@ -46,7 +47,7 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
         timestamp = datetime.datetime.now().isoformat()
-
+        
         # Convert dicts to JSON strings for storage
         features_json = json.dumps(features)
         predictions_json = json.dumps(predictions)
@@ -55,7 +56,7 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
             """
             INSERT INTO build_records (timestamp, build_number, job_name, build_url, raw_features_json, raw_predictions_json)
             VALUES (?, ?, ?, ?, ?, ?);
-        """,
+            """,
             (
                 timestamp,
                 build_number,
@@ -92,12 +93,13 @@ def get_previous_build_status_from_db():
             predictions = json.loads(row["raw_predictions_json"])
             # Assuming 'build_success_prediction' is 1 for success, 0 for failure
             return predictions.get("build_success_prediction", 1)
-        else:
-            return 1  # No previous build, assume success
-    except sqlite3.Error as e:
+        # REMOVED ELSE BLOCK AND DE-INDENTED
         print(
-            f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1)."
-        )
+            f"WARNING: Could not fetch previous build status from DB. Assuming previous success (1)."
+        )  # Removed {e} as it's not available here
+        return 1
+    except sqlite3.Error as e:
+        print(f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1).")
         return 1
     finally:
         if conn:
@@ -127,14 +129,11 @@ def main():
     print(f"Previous build status (from local DB): {previous_build_status}")
 
     # --- Simulate/Collect Features (replace with real data collection in a real pipeline) ---
-    # In a real scenario, these features would be collected from the current build
-    # (e.g., Git changes, test results, static analysis metrics).
-    # For this demo, we'll use placeholder values.
     features = {
         "lines_of_code_changed": 150,
         "num_files_changed": 5,
         "commit_message_length": 45,
-        "previous_build_status": previous_build_status,  # Use fetched status
+        "previous_build_status": previous_build_status,
         "num_tests_run": 100,
         "test_pass_rate": 0.98,
         "developer_experience_level": 3,
@@ -148,7 +147,7 @@ def main():
 
     # Make prediction request to ML API
     try:
-        response = requests.post(ML_API_URL, json=features)
+        response = requests.post(ML_API_URL, json=features, timeout=10)  # ADDED timeout=10
         response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
         predictions = response.json()
         print(f"ML API Predictions: {predictions}")
@@ -159,18 +158,17 @@ def main():
         )
 
         # --- Implement Quality Gate Logic ---
-        # Example: Fail the build if predicted success probability is too low or if it's an anomaly
         if (
             predictions.get("build_success_prediction", 0) == 0
-        ):  # If prediction is 0 (failure)
+        ):
             print("QUALITY GATE FAILED: ML model predicts build failure!")
-            exit(1)  # Exit with non-zero code to fail Jenkins build
+            sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
 
         if predictions.get("is_anomaly_prediction") == "Anomaly":
             print(
                 "QUALITY GATE FAILED: ML model detected an anomaly in build features!"
             )
-            exit(1)  # Exit with non-zero code to fail Jenkins build
+            sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
 
         print(
             "QUALITY GATE PASSED: ML model predicts build success and no anomalies detected."
@@ -179,15 +177,15 @@ def main():
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Failed to connect to ML API: {e}")
         print("QUALITY GATE FAILED: ML API connection error.")
-        exit(1)  # Fail Jenkins build if API is unreachable
+        sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
     except json.JSONDecodeError as e:
         print(f"ERROR: Failed to decode JSON response from ML API: {e}")
         print("QUALITY GATE FAILED: Invalid ML API response.")
-        exit(1)  # Fail Jenkins build
+        sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
     except Exception as e:
         print(f"ERROR: An unexpected error occurred: {e}")
         print("QUALITY GATE FAILED: Unexpected error during ML prediction.")
-        exit(1)  # Fail Jenkins build
+        sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
 
 
 if __name__ == "__main__":
