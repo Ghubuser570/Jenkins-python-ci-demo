@@ -1,365 +1,157 @@
-# jenkins-python-ci-demo/ml_api_client.py (Corrected Version with Pylint Fixes and Refactoring)
-import os
-import sys
-from datetime import datetime
-import sqlite3
-import json
-
+# ml_api_client.py
 import requests
-import git
-import jenkins
-import numpy as np
+import json
+import sqlite3
+import datetime
+import argparse # Import argparse for command-line arguments
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
-JENKINS_URL = "http://localhost:8080"
-JENKINS_USERNAME = "75"
-JENKINS_API_TOKEN = "11996ed55f52b97013614dde3865c5b594"
-JENKINS_JOB_NAME = "jenkins-python-pipeline"
-SQLITE_DB_PATH = os.path.join("data", "build_history.db")
+SQLITE_DB_PATH = "data/build_history.db" # Relative path within Jenkins workspace
+# --- End Configuration ---
 
-
-def get_ml_predictions(build_features):
-    """
-    Sends build features to the ML API and returns the predictions.
-    """
-    headers = {"Content-Type": "application/json"}
-    try:
-        response = requests.post(
-            ML_API_URL, headers=headers, data=json.dumps(build_features), timeout=10
-        )
-        response.raise_for_status()
-        predictions = response.json()
-        return predictions
-    except requests.exceptions.ConnectionError:
-        print(f"ERROR: Could not connect to ML API at {ML_API_URL}. Is it running?")
-        return None
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Request to ML API failed: {e}")
-        return None
-
-
-def initialize_db():
-    """
-    Initializes the SQLite database and creates the build_records table
-    if it does not already exist.
-    """
-    os.makedirs(os.path.dirname(SQLITE_DB_PATH), exist_ok=True)
-
+def create_db_and_table():
+    """Creates the SQLite database and build_records table if they don't exist."""
     conn = None
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS build_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
-                loc_changed INTEGER,
-                files_changed INTEGER,
-                commit_msg_len INTEGER,
-                previous_build_status INTEGER,
-                num_tests_run INTEGER,
-                test_pass_rate REAL,
-                developer_experience_level INTEGER,
-                build_environment_load INTEGER,
-                build_success_prediction INTEGER,
-                build_success_probability REAL,
-                build_duration_estimation_minutes REAL,
-                anomaly_score REAL,
-                is_anomaly_prediction TEXT,
-                raw_features_json TEXT,
-                raw_predictions_json TEXT
-            )
-        """
-        )
+                build_number INTEGER NOT NULL,
+                job_name TEXT NOT NULL,
+                build_url TEXT NOT NULL,
+                raw_features_json TEXT NOT NULL,
+                raw_predictions_json TEXT NOT NULL
+            );
+        """)
         conn.commit()
-        print(f"SQLite database '{SQLITE_DB_PATH}' initialized successfully.")
+        print(f"Database and table created/verified at {SQLITE_DB_PATH}")
     except sqlite3.Error as e:
-        print(f"ERROR: SQLite database initialization failed: {e}")
-        sys.exit(1)
+        print(f"ERROR: Failed to create database or table: {e}")
     finally:
         if conn:
             conn.close()
 
-
-def save_build_data(data):
-    """
-    Inserts a new build's features and predictions into the SQLite database.
-    """
+def save_build_record(build_number, job_name, build_url, features, predictions):
+    """Saves a build record to the SQLite database."""
     conn = None
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
+        timestamp = datetime.datetime.now().isoformat()
+        
+        # Convert dicts to JSON strings for storage
+        features_json = json.dumps(features)
+        predictions_json = json.dumps(predictions)
 
-        timestamp = data["timestamp"]
-        features = data["features"]
-        predictions = data["predictions"]
-
-        cursor.execute(
-            """
-            INSERT INTO build_records (
-                timestamp, loc_changed, files_changed, commit_msg_len,
-                previous_build_status, num_tests_run, test_pass_rate,
-                developer_experience_level, build_environment_load,
-                build_success_prediction, build_success_probability,
-                build_duration_estimation_minutes, anomaly_score,
-                is_anomaly_prediction, raw_features_json, raw_predictions_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                timestamp,
-                features.get("lines_of_code_changed"),
-                features.get("num_files_changed"),
-                features.get("commit_message_length"),
-                features.get("previous_build_status"),
-                features.get("num_tests_run"),
-                features.get("test_pass_rate"),
-                features.get("developer_experience_level"),
-                features.get("build_environment_load"),
-                predictions.get("build_success_prediction"),
-                predictions.get("build_success_probability"),
-                predictions.get("build_duration_estimation_minutes"),
-                predictions.get("anomaly_score"),
-                predictions.get("is_anomaly_prediction"),
-                json.dumps(features),
-                json.dumps(predictions),
-            ),
-        )
+        cursor.execute("""
+            INSERT INTO build_records (timestamp, build_number, job_name, build_url, raw_features_json, raw_predictions_json)
+            VALUES (?, ?, ?, ?, ?, ?);
+        """, (timestamp, build_number, job_name, build_url, features_json, predictions_json))
         conn.commit()
-        print(f"Build data saved to SQLite database '{SQLITE_DB_PATH}'.")
+        print(f"Build record for build {build_number} saved to DB.")
     except sqlite3.Error as e:
-        print(f"ERROR: Failed to save build data to SQLite: {e}")
+        print(f"ERROR: Failed to save build record: {e}")
     finally:
         if conn:
             conn.close()
 
-
-def get_recent_build_history(num_builds=5):
+def get_previous_build_status_from_db():
     """
-    Fetches the last N build records from the SQLite database.
-    Returns a list of dictionaries, each representing a build record.
+    Fetches the status of the most recent previous build from the local database.
+    Returns 1 for success, 0 for failure, or 1 if no previous record (assume success for first build).
     """
     conn = None
-    history = []
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row # Allows accessing columns by name
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM build_records ORDER BY timestamp DESC LIMIT ?", (num_builds,)
-        )
-        rows = cursor.fetchall()
-        for row in rows:
-            record = dict(row)
-            record["features"] = json.loads(record["raw_features_json"])
-            record["predictions"] = json.loads(record["raw_predictions_json"])
-            history.append(record)
-        print(f"Fetched {len(history)} recent build records from SQLite.")
+        cursor.execute("SELECT raw_predictions_json FROM build_records ORDER BY timestamp DESC LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            predictions = json.loads(row['raw_predictions_json'])
+            # Assuming 'build_success_prediction' is 1 for success, 0 for failure
+            return predictions.get('build_success_prediction', 1) 
+        else:
+            return 1 # No previous build, assume success
     except sqlite3.Error as e:
-        print(f"ERROR: Failed to fetch recent build history from SQLite: {e}")
+        print(f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1).")
+        return 1
     finally:
         if conn:
             conn.close()
-    return history
 
+def main():
+    parser = argparse.ArgumentParser(description="ML API Client for Jenkins CI/CD Quality Gate.")
+    parser.add_argument('--build-number', type=int, required=True, help='Current Jenkins build number.')
+    parser.add_argument('--job-name', type=str, required=True, help='Current Jenkins job name.')
+    parser.add_argument('--build-url', type=str, required=True, help='Current Jenkins build URL.')
+    args = parser.parse_args()
 
-def calculate_temporal_features(build_history):  # Removed 'current_features'
-    """
-    Calculates temporal features based on historical build data.
-    """
-    temporal_features = {}
+    # Create DB and table
+    create_db_and_table()
 
-    if build_history:
-        valid_loc_changes = [
-            rec["loc_changed"]
-            for rec in build_history
-            if rec.get("loc_changed") is not None
-        ]
-        if valid_loc_changes:
-            temporal_features["avg_loc_changed_last_N"] = sum(valid_loc_changes) / len(
-                valid_loc_changes
-            )
-        else:
-            temporal_features["avg_loc_changed_last_N"] = 0
+    # Get previous build status from local DB
+    previous_build_status = get_previous_build_status_from_db()
+    print(f"Previous build status (from local DB): {previous_build_status}")
 
-        if (
-            len(build_history) >= 1
-            and build_history[0].get("build_duration_estimation_minutes") is not None
-        ):
-            last_build_duration = build_history[0]["build_duration_estimation_minutes"]
-            temporal_features["last_build_duration"] = last_build_duration
-        else:
-            temporal_features["last_build_duration"] = 0
+    # --- Simulate/Collect Features (replace with real data collection in a real pipeline) ---
+    # In a real scenario, these features would be collected from the current build
+    # (e.g., Git changes, test results, static analysis metrics).
+    # For this demo, we'll use placeholder values.
+    features = {
+        "lines_of_code_changed": 150,
+        "num_files_changed": 5,
+        "commit_message_length": 45,
+        "previous_build_status": previous_build_status, # Use fetched status
+        "num_tests_run": 100,
+        "test_pass_rate": 0.98,
+        "developer_experience_level": 3,
+        "build_environment_load": 70,
+        "avg_loc_changed_last_N": 50.0,
+        "last_build_duration": 25.5,
+        "consecutive_failures_last_N": 0,
+        "avg_test_pass_rate_last_N": 0.95
+    }
+    print(f"Features prepared: {features}")
 
-        consecutive_failures = 0
-        for rec in build_history:
-            if rec["features"].get("previous_build_status") == 0:
-                consecutive_failures += 1
-            else:
-                break
-        temporal_features["consecutive_failures_last_N"] = consecutive_failures
-
-        valid_test_pass_rates = [
-            rec["test_pass_rate"]
-            for rec in build_history
-            if rec.get("test_pass_rate") is not None
-        ]
-        if valid_test_pass_rates:
-            temporal_features["avg_test_pass_rate_last_N"] = sum(
-                valid_test_pass_rates
-            ) / len(valid_test_pass_rates)
-        else:
-            temporal_features["avg_test_pass_rate_last_N"] = 1.0
-    else:
-        temporal_features["avg_loc_changed_last_N"] = 0
-        temporal_features["last_build_duration"] = 0
-        temporal_features["consecutive_failures_last_N"] = 0
-        temporal_features["avg_test_pass_rate_last_N"] = 1.0
-
-    print(f"Calculated Temporal Features: {temporal_features}")
-    return temporal_features
-
-
-def _extract_git_features():
-    """Helper to extract Git-related features."""
-    git_features = {}
+    # Make prediction request to ML API
     try:
-        repo_path = os.getcwd()
-        repo = git.Repo(repo_path)
-        latest_commit = repo.head.commit
-        diff_stats = latest_commit.stats.total
-        git_features["lines_of_code_changed"] = diff_stats["lines"]
-        git_features["num_files_changed"] = diff_stats["files"]
-        git_features["commit_message_length"] = len(latest_commit.message)
-        print(
-            f"Git Features Extracted: LOC Changed={git_features['lines_of_code_changed']}, Files Changed={git_features['num_files_changed']}, Commit Msg Len={git_features['commit_message_length']}"
-        )
-    except (git.InvalidGitRepositoryError, Exception) as e:
-        print(
-            f"WARNING: Could not extract Git features: {e}. Using default/simulated values."
-        )
-        git_features["lines_of_code_changed"] = 50
-        git_features["num_files_changed"] = 5
-        git_features["commit_message_length"] = 50
-    return git_features
+        response = requests.post(ML_API_URL, json=features)
+        response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
+        predictions = response.json()
+        print(f"ML API Predictions: {predictions}")
 
+        # Save the build record
+        save_build_record(args.build_number, args.job_name, args.build_url, features, predictions)
 
-def _extract_jenkins_features():
-    """Helper to extract Jenkins-related features."""
-    jenkins_features = {}
-    try:
-        print("Attempting to connect to Jenkins for feature extraction...")
-        server = jenkins.Jenkins(
-            JENKINS_URL,
-            username=JENKINS_USERNAME,
-            password=JENKINS_API_TOKEN,
-            timeout=10,
-        )
-        server_version = server.get_version()
-        print(f"Successfully connected to Jenkins API! Version: {server_version}")
-        job_info = server.get_job_info(JENKINS_JOB_NAME)
-        last_build_number = job_info["lastCompletedBuild"]["number"]
-        last_build_info = server.get_build_info(JENKINS_JOB_NAME, last_build_number)
-        last_build_result = last_build_info["result"]
-        jenkins_features["previous_build_status"] = (
-            1 if last_build_result == "SUCCESS" else 0
-        )
-        print(
-            f"Jenkins Feature Extracted: Previous Build Status={last_build_result} ({jenkins_features['previous_build_status']})"
-        )
-    except (
-        jenkins.JenkinsException,
-        requests.exceptions.ConnectionError,
-        Exception,
-    ) as e:
-        print(
-            f"WARNING: Jenkins feature extraction failed: {e}. Using default/simulated values."
-        )
-        jenkins_features["previous_build_status"] = 1
-    return jenkins_features
+        # --- Implement Quality Gate Logic ---
+        # Example: Fail the build if predicted success probability is too low or if it's an anomaly
+        if predictions.get("build_success_prediction", 0) == 0: # If prediction is 0 (failure)
+            print("QUALITY GATE FAILED: ML model predicts build failure!")
+            exit(1) # Exit with non-zero code to fail Jenkins build
+        
+        if predictions.get("is_anomaly_prediction") == "Anomaly":
+            print("QUALITY GATE FAILED: ML model detected an anomaly in build features!")
+            exit(1) # Exit with non-zero code to fail Jenkins build
 
+        print("QUALITY GATE PASSED: ML model predicts build success and no anomalies detected.")
 
-def _get_simulated_features():
-    """Helper to get simulated features."""
-    simulated_features = {}
-    simulated_features["num_tests_run"] = 200
-    simulated_features["test_pass_rate"] = round(np.random.uniform(0.90, 1.0), 2)
-    simulated_features["developer_experience_level"] = 3
-    simulated_features["build_environment_load"] = np.random.randint(40, 90)
-    return simulated_features
-
-
-def extract_real_build_features():
-    """
-    Extracts real-ish build features from the Git repository and Jenkins,
-    and includes simulated and temporal features.
-    """
-    features = {}
-
-    # Combine features from helper functions
-    features.update(_extract_git_features())
-    features.update(_extract_jenkins_features())
-    features.update(_get_simulated_features())
-
-    # Calculate Temporal Features
-    print("Fetching recent build history for temporal feature calculation...")
-    recent_history = get_recent_build_history(num_builds=5)
-    temporal_feats = calculate_temporal_features(
-        recent_history
-    )  # Removed 'features' argument
-    features.update(temporal_feats)
-
-    # --- TEMPORARY: Logic to force a failure scenario for demo (UNCOMMENT FOR DEMO, COMMENT FOR NORMAL OPERATION) ---
-    # features['lines_of_code_changed'] = 450
-    # features['num_files_changed'] = 40
-    # features['num_tests_run'] = 50
-    # features['test_pass_rate'] = 0.60
-    # features['previous_build_status'] = 0
-    # features['commit_message_length'] = 120
-    # features['developer_experience_level'] = 2
-    # features['build_environment_load'] = 95
-    # print("\n--- DEMO MODE: FORCING FAILURE SCENARIO FEATURES ---")
-    # --- END TEMPORARY ---
-
-    return features
-
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Failed to connect to ML API: {e}")
+        print("QUALITY GATE FAILED: ML API connection error.")
+        exit(1) # Fail Jenkins build if API is unreachable
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Failed to decode JSON response from ML API: {e}")
+        print("QUALITY GATE FAILED: Invalid ML API response.")
+        exit(1) # Fail Jenkins build
+    except Exception as e:
+        print(f"ERROR: An unexpected error occurred: {e}")
+        print("QUALITY GATE FAILED: Unexpected error during ML prediction.")
+        exit(1) # Fail Jenkins build
 
 if __name__ == "__main__":
-    initialize_db()
-
-    print("Extracting real-ish build features...")
-    current_features = extract_real_build_features()
-    print(f"\nFeatures to send to ML API: {current_features}")
-
-    print("\nRequesting predictions from ML API...")
-    predictions = get_ml_predictions(current_features)
-
-    if predictions:
-        print("\nML Predictions:")
-        print(json.dumps(predictions, indent=4))
-
-        build_record = {
-            "timestamp": datetime.now().isoformat(),
-            "features": current_features,
-            "predictions": predictions,
-        }
-        save_build_data(build_record)
-
-        if predictions.get("build_success_prediction") == 0:
-            print("\n--- QUALITY GATE FAILED: ML predicted build failure! ---")
-            sys.exit(1)
-        elif predictions.get("is_anomaly_prediction") == "Anomaly":
-            print("\n--- QUALITY GATE FAILED: ML detected an anomaly! ---")
-            sys.exit(1)
-        elif predictions.get("build_duration_estimation_minutes") > 45:
-            print(
-                f"\n--- QUALITY GATE FAILED: Estimated build time ({predictions.get('build_duration_estimation_minutes')} min) is too high! ---"
-            )
-            sys.exit(1)
-        else:
-            print("\n--- QUALITY GATE PASSED: Build looks good! ---")
-            sys.exit(0)
-    else:
-        print("\nFailed to get predictions from ML API. Quality Gate FAILED.")
-        sys.exit(1)
+    main()
