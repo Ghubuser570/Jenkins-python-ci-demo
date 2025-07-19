@@ -95,7 +95,7 @@ def get_previous_build_status_from_db():
             return predictions.get("build_success_prediction", 1)
         # REMOVED ELSE BLOCK AND DE-INDENTED
         print(
-            f"WARNING: Could not fetch previous build status from DB. Assuming previous success (1)."
+            "WARNING: Could not fetch previous build status from DB. Assuming previous success (1)."
         )  # Removed {e} as it's not available here
         return 1
     except sqlite3.Error as e:
