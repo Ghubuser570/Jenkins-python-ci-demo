@@ -11,21 +11,30 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 // The 'git' step pulls the code from your GitHub repository.
-                // 'branch: 'main'' specifies the branch to build.
-                // 'credentialsId: 'github-pat'' references the Secret text credential you set up in Jenkins.
-                // 'url' is the HTTPS URL of your GitHub repository.
                 git branch: 'main', credentialsId: 'github-username-pat', url: 'https://github.com/Ghubuser570/jenkins-python-ci-demo.git'
-                // IMPORTANT: Replace YOUR_GITHUB_USERNAME with your actual GitHub username.
             }
         }
 
-        // Stage 2: Install Python Dependencies
-        stage('Install Dependencies') {
+        // Stage 2: Prepare Python Environment and Install Dependencies
+        // We will create and activate a virtual environment within the Jenkins workspace
+        // to ensure isolated and consistent dependency management for the client script.
+        stage('Prepare Python Env') {
             steps {
                 script {
-                    // Create a Python virtual environment to isolate dependencies.
-                    // 'py -3 -m venv venv' uses the Python launcher to create a venv for Python 3.
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pip install -r requirements.txt'
+                    // Create a Python virtual environment in the workspace
+                    // Using 'python' directly assumes it's in PATH or specified in Jenkins global config
+                    // For robustness, we'll keep the full path for now, but aim for 'python -m venv venv'
+                    // if Python is properly configured in Jenkins agent's PATH.
+                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m venv venv'
+                    echo "Virtual environment created."
+
+                    // Activate the virtual environment and install dependencies for ml_api_client.py
+                    // These dependencies are requests, sqlite3 (built-in), etc.
+                    // Assuming requirements.txt in the repo contains these.
+                    // If ml_api_client.py has very few, specific dependencies, you could install them directly.
+                    // For now, let's assume requirements.txt has what ml_api_client.py needs.
+                    bat 'venv\\Scripts\\activate && pip install -r requirements.txt'
+                    echo "Dependencies installed into virtual environment."
                 }
             }
         }
@@ -34,53 +43,54 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    // Directly call python.exe to run pytest
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pytest'
+                    // Activate venv and then run pytest
+                    bat 'venv\\Scripts\\activate && "C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pytest'
                 }
             }
         }
 
+        // Stage 4: Code Formatting Check (Black)
         stage('Code Formatting Check') {
             steps {
                 script {
-                    // Use black to check for formatting issues.
-                    // --check: don't write changes, just return non-zero exit code if changes would be made.
-                    // --diff: show the diff of what would be changed.
-                    // . : check current directory
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m black --check --diff .'
+                    // Activate venv and then run black
+                    bat 'venv\\Scripts\\activate && "C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m black --check --diff .'
                 }
             }
         }
 
-        // --- NEW STAGE: Code Linting (Pylint) ---
+        // Stage 5: Code Linting (Pylint)
         stage('Code Linting') {
             steps {
                 script {
-                    // Run pylint on your Python application files.
-                    // Adjust 'app.py' and 'test_app.py' to include all your Python files.
-                    // Consider adding ml_api_client.py if you want to lint it too.
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pylint app.py test_app.py ml_api_client.py'
+                    // Activate venv and then run pylint
+                    // Ensure 'app.py', 'test_app.py', 'ml_api_client.py' are in your repo's root or adjust paths.
+                    // If app.py and test_app.py are in ml-service/ folder, you'd need to adjust paths here.
+                    // Assuming they are in the root of the checked-out repo for now.
+                    bat 'venv\\Scripts\\activate && "C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" -m pylint app.py test_app.py ml_api_client.py'
                 }
             }
         }
 
+        // Stage 6: ML Quality Gate - Interact with Containerized ML Service
         stage('ML Quality Gate') {
             steps {
                 script {
-                    // Directly call python.exe to run the client script
-                    bat '"C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" ml_api_client.py'
+                    // Ensure the Docker Compose stack is UP and running before this stage.
+                    // This Jenkinsfile does NOT start the Docker Compose stack itself.
+                    // It assumes the stack (ml-api, prometheus, grafana) is already running.
+                    echo "Running ML Quality Gate against containerized ML service..."
+                    // Activate venv and then run the client script
+                    bat 'venv\\Scripts\\activate && "C:\\Users\\75\\AppData\\Local\\Programs\\Python\\Python310\\python.exe" ml_api_client.py'
+                    echo "ML Quality Gate complete."
                 }
             }
         }
 
-        
-
-        // Stage 4: Simple Build/Verification (Placeholder for more complex build steps)
+        // Stage 7: Simple Build/Verification (Placeholder for more complex build steps)
         stage('Build/Verify') {
             steps {
-                // Echo commands to show progress.
                 bat 'echo "Building and verifying the application..."'
-                // You could add more complex build steps here, e.g., linting, static analysis.
                 bat 'echo "Build/Verification complete!"'
             }
         }
@@ -88,33 +98,31 @@ pipeline {
 
     // Post-build actions: These steps run after all stages are complete, regardless of success or failure.
     post {
-        // 'always' block runs every time.
         always {
             echo 'Post-build actions always executed.'
-            
             script {
+                // Define the source path of the DB in the Jenkins workspace
                 def sourceDbPath = "data\\build_history.db"
+                // Define the destination path on the host machine, which is mounted by the Docker container
                 def destinationDbPath = "C:\\Users\\75\\Desktop\\Capstone\\Jenkins-python-ci-demo\\data\\build_history.db"
 
                 // Check if the source DB file exists in the workspace before attempting to copy
-                // This prevents errors if the ML Quality Gate itself failed before creating the DB
-                def workspaceDataDir = "${env.WORKSPACE}\\data" // Path to the data dir in Jenkins workspace
+                def workspaceDataDir = "${env.WORKSPACE}\\data"
                 def sourceFileExists = fileExists("${workspaceDataDir}\\build_history.db")
 
                 if (sourceFileExists) {
+                    // Copy the DB from Jenkins workspace to the host path (which is mounted by the container)
                     bat "copy /Y \"${sourceDbPath}\" \"${destinationDbPath}\""
                     echo "Copied build_history.db from Jenkins workspace to ${destinationDbPath}"
                 } else {
                     echo "build_history.db not found in Jenkins workspace, skipping copy."
                 }
             }
-            cleanWs()
+            cleanWs() // Clean the Jenkins workspace after the build
         }
-        // 'success' block runs only if all stages passed.
         success {
             echo 'Pipeline finished successfully!'
         }
-        // 'failure' block runs only if any stage failed.
         failure {
             echo 'Pipeline failed!'
         }
