@@ -3,12 +3,13 @@ import requests
 import json
 import sqlite3
 import datetime
-import argparse # Import argparse for command-line arguments
+import argparse  # Import argparse for command-line arguments
 
 # --- Configuration ---
 ML_API_URL = "http://localhost:5000/predict"
-SQLITE_DB_PATH = "data/build_history.db" # Relative path within Jenkins workspace
+SQLITE_DB_PATH = "data/build_history.db"  # Relative path within Jenkins workspace
 # --- End Configuration ---
+
 
 def create_db_and_table():
     """Creates the SQLite database and build_records table if they don't exist."""
@@ -16,7 +17,8 @@ def create_db_and_table():
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS build_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -26,7 +28,8 @@ def create_db_and_table():
                 raw_features_json TEXT NOT NULL,
                 raw_predictions_json TEXT NOT NULL
             );
-        """)
+        """
+        )
         conn.commit()
         print(f"Database and table created/verified at {SQLITE_DB_PATH}")
     except sqlite3.Error as e:
@@ -35,6 +38,7 @@ def create_db_and_table():
         if conn:
             conn.close()
 
+
 def save_build_record(build_number, job_name, build_url, features, predictions):
     """Saves a build record to the SQLite database."""
     conn = None
@@ -42,15 +46,25 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
         timestamp = datetime.datetime.now().isoformat()
-        
+
         # Convert dicts to JSON strings for storage
         features_json = json.dumps(features)
         predictions_json = json.dumps(predictions)
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO build_records (timestamp, build_number, job_name, build_url, raw_features_json, raw_predictions_json)
             VALUES (?, ?, ?, ?, ?, ?);
-        """, (timestamp, build_number, job_name, build_url, features_json, predictions_json))
+        """,
+            (
+                timestamp,
+                build_number,
+                job_name,
+                build_url,
+                features_json,
+                predictions_json,
+            ),
+        )
         conn.commit()
         print(f"Build record for build {build_number} saved to DB.")
     except sqlite3.Error as e:
@@ -58,6 +72,7 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
     finally:
         if conn:
             conn.close()
+
 
 def get_previous_build_status_from_db():
     """
@@ -67,28 +82,41 @@ def get_previous_build_status_from_db():
     conn = None
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
-        conn.row_factory = sqlite3.Row # Allows accessing columns by name
+        conn.row_factory = sqlite3.Row  # Allows accessing columns by name
         cursor = conn.cursor()
-        cursor.execute("SELECT raw_predictions_json FROM build_records ORDER BY timestamp DESC LIMIT 1")
+        cursor.execute(
+            "SELECT raw_predictions_json FROM build_records ORDER BY timestamp DESC LIMIT 1"
+        )
         row = cursor.fetchone()
         if row:
-            predictions = json.loads(row['raw_predictions_json'])
+            predictions = json.loads(row["raw_predictions_json"])
             # Assuming 'build_success_prediction' is 1 for success, 0 for failure
-            return predictions.get('build_success_prediction', 1) 
+            return predictions.get("build_success_prediction", 1)
         else:
-            return 1 # No previous build, assume success
+            return 1  # No previous build, assume success
     except sqlite3.Error as e:
-        print(f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1).")
+        print(
+            f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1)."
+        )
         return 1
     finally:
         if conn:
             conn.close()
 
+
 def main():
-    parser = argparse.ArgumentParser(description="ML API Client for Jenkins CI/CD Quality Gate.")
-    parser.add_argument('--build-number', type=int, required=True, help='Current Jenkins build number.')
-    parser.add_argument('--job-name', type=str, required=True, help='Current Jenkins job name.')
-    parser.add_argument('--build-url', type=str, required=True, help='Current Jenkins build URL.')
+    parser = argparse.ArgumentParser(
+        description="ML API Client for Jenkins CI/CD Quality Gate."
+    )
+    parser.add_argument(
+        "--build-number", type=int, required=True, help="Current Jenkins build number."
+    )
+    parser.add_argument(
+        "--job-name", type=str, required=True, help="Current Jenkins job name."
+    )
+    parser.add_argument(
+        "--build-url", type=str, required=True, help="Current Jenkins build URL."
+    )
     args = parser.parse_args()
 
     # Create DB and table
@@ -106,7 +134,7 @@ def main():
         "lines_of_code_changed": 150,
         "num_files_changed": 5,
         "commit_message_length": 45,
-        "previous_build_status": previous_build_status, # Use fetched status
+        "previous_build_status": previous_build_status,  # Use fetched status
         "num_tests_run": 100,
         "test_pass_rate": 0.98,
         "developer_experience_level": 3,
@@ -114,7 +142,7 @@ def main():
         "avg_loc_changed_last_N": 50.0,
         "last_build_duration": 25.5,
         "consecutive_failures_last_N": 0,
-        "avg_test_pass_rate_last_N": 0.95
+        "avg_test_pass_rate_last_N": 0.95,
     }
     print(f"Features prepared: {features}")
 
@@ -126,32 +154,41 @@ def main():
         print(f"ML API Predictions: {predictions}")
 
         # Save the build record
-        save_build_record(args.build_number, args.job_name, args.build_url, features, predictions)
+        save_build_record(
+            args.build_number, args.job_name, args.build_url, features, predictions
+        )
 
         # --- Implement Quality Gate Logic ---
         # Example: Fail the build if predicted success probability is too low or if it's an anomaly
-        if predictions.get("build_success_prediction", 0) == 0: # If prediction is 0 (failure)
+        if (
+            predictions.get("build_success_prediction", 0) == 0
+        ):  # If prediction is 0 (failure)
             print("QUALITY GATE FAILED: ML model predicts build failure!")
-            exit(1) # Exit with non-zero code to fail Jenkins build
-        
-        if predictions.get("is_anomaly_prediction") == "Anomaly":
-            print("QUALITY GATE FAILED: ML model detected an anomaly in build features!")
-            exit(1) # Exit with non-zero code to fail Jenkins build
+            exit(1)  # Exit with non-zero code to fail Jenkins build
 
-        print("QUALITY GATE PASSED: ML model predicts build success and no anomalies detected.")
+        if predictions.get("is_anomaly_prediction") == "Anomaly":
+            print(
+                "QUALITY GATE FAILED: ML model detected an anomaly in build features!"
+            )
+            exit(1)  # Exit with non-zero code to fail Jenkins build
+
+        print(
+            "QUALITY GATE PASSED: ML model predicts build success and no anomalies detected."
+        )
 
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Failed to connect to ML API: {e}")
         print("QUALITY GATE FAILED: ML API connection error.")
-        exit(1) # Fail Jenkins build if API is unreachable
+        exit(1)  # Fail Jenkins build if API is unreachable
     except json.JSONDecodeError as e:
         print(f"ERROR: Failed to decode JSON response from ML API: {e}")
         print("QUALITY GATE FAILED: Invalid ML API response.")
-        exit(1) # Fail Jenkins build
+        exit(1)  # Fail Jenkins build
     except Exception as e:
         print(f"ERROR: An unexpected error occurred: {e}")
         print("QUALITY GATE FAILED: Unexpected error during ML prediction.")
-        exit(1) # Fail Jenkins build
+        exit(1)  # Fail Jenkins build
+
 
 if __name__ == "__main__":
     main()
