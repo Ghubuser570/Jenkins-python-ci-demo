@@ -49,7 +49,7 @@ def save_build_record(build_number, job_name, build_url, features, predictions):
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
         timestamp = datetime.datetime.now().isoformat()
-        
+
         # Convert dicts to JSON strings for storage
         features_json = json.dumps(features)
         predictions_json = json.dumps(predictions)
@@ -100,7 +100,9 @@ def get_previous_build_status_from_db():
         )
         return 1
     except sqlite3.Error as e:
-        print(f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1).")
+        print(
+            f"WARNING: Could not fetch previous build status from DB: {e}. Assuming previous success (1)."
+        )
         return 1
     finally:
         if conn:
@@ -148,7 +150,9 @@ def main():
 
     # Make prediction request to ML API
     try:
-        response = requests.post(ML_API_URL, json=features, timeout=10)  # ADDED timeout=10
+        response = requests.post(
+            ML_API_URL, json=features, timeout=10
+        )  # ADDED timeout=10
         response.raise_for_status()  # Raise an HTTPError for bad responses (4xx or 5xx)
         predictions = response.json()
         print(f"ML API Predictions: {predictions}")
@@ -159,9 +163,7 @@ def main():
         )
 
         # --- Implement Quality Gate Logic ---
-        if (
-            predictions.get("build_success_prediction", 0) == 0
-        ):
+        if predictions.get("build_success_prediction", 0) == 0:
             print("QUALITY GATE FAILED: ML model predicts build failure!")
             sys.exit(1)  # CHANGED exit(1) to sys.exit(1)
 
